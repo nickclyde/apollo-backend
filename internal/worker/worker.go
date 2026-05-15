@@ -14,7 +14,7 @@ import (
 
 const pollDuration = 100 * time.Millisecond
 
-type NewWorkerFn func(context.Context, *zap.Logger, trace.Tracer, *statsd.Client, *pgxpool.Pool, *redis.Client, rmq.Connection, int) Worker
+type NewWorkerFn func(context.Context, *zap.Logger, trace.Tracer, statsd.ClientInterface, *pgxpool.Pool, *redis.Client, rmq.Connection, int) Worker
 type Worker interface {
 	Start() error
 	Stop()

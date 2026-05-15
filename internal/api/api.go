@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
-	"github.com/bugsnag/bugsnag-go/v2"
 	"github.com/go-redis/redis/v8"
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
@@ -25,7 +24,7 @@ import (
 
 type api struct {
 	logger     *zap.Logger
-	statsd     *statsd.Client
+	statsd     statsd.ClientInterface
 	reddit     *reddit.Client
 	apns       *token.Token
 	httpClient *http.Client
@@ -37,7 +36,7 @@ type api struct {
 	userRepo      domain.UserRepository
 }
 
-func NewAPI(ctx context.Context, logger *zap.Logger, statsd *statsd.Client, redis *redis.Client, pool *pgxpool.Pool) *api {
+func NewAPI(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterface, redis *redis.Client, pool *pgxpool.Pool) *api {
 	tracer := otel.Tracer("api")
 
 	reddit := reddit.NewClient(
@@ -89,7 +88,7 @@ func NewAPI(ctx context.Context, logger *zap.Logger, statsd *statsd.Client, redi
 func (a *api) Server(port int) *http.Server {
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: bugsnag.Handler(a.Routes()),
+		Handler: a.Routes(),
 	}
 }
 
@@ -119,20 +118,10 @@ func (a *api) Routes() *mux.Router {
 	r.HandleFunc("/v1/device/{apns}/account/{redditID}/watcher/{watcherID}", a.editWatcherHandler).Methods("PATCH")
 	r.HandleFunc("/v1/device/{apns}/account/{redditID}/watchers", a.listWatchersHandler).Methods("GET")
 
-	r.HandleFunc("/v1/test/bugsnag", a.testBugsnagHandler).Methods("POST")
-
 	r.Use(a.loggingMiddleware)
 	r.Use(a.requestIdMiddleware)
 
 	return r
-}
-
-func (a *api) testBugsnagHandler(w http.ResponseWriter, r *http.Request) {
-	if err := bugsnag.Notify(fmt.Errorf("Test error")); err != nil {
-		a.errorResponse(w, r, 500, err)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
 }
 
 type LoggingResponseWriter struct {

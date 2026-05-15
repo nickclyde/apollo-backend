@@ -30,12 +30,17 @@ func NewLogger(service string) *zap.Logger {
 	return logger
 }
 
-func NewStatsdClient(tags ...string) (*statsd.Client, error) {
+func NewStatsdClient(tags ...string) (statsd.ClientInterface, error) {
+	url := os.Getenv("STATSD_URL")
+	if url == "" {
+		return &statsd.NoOpClient{}, nil
+	}
+
 	if env := os.Getenv("ENV"); env != "" {
 		tags = append(tags, fmt.Sprintf("env:%s", env))
 	}
 
-	return statsd.New(os.Getenv("STATSD_URL"), statsd.WithTags(tags))
+	return statsd.New(url, statsd.WithTags(tags))
 }
 
 func NewRedisLocksClient(ctx context.Context, maxConns int) (*redis.Client, error) {

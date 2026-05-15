@@ -184,7 +184,7 @@ func cleanQueues(logger *zap.Logger, jobsConn rmq.Connection) {
 	}
 }
 
-func reportStats(ctx context.Context, logger *zap.Logger, statsd *statsd.Client, pool *pgxpool.Pool) {
+func reportStats(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterface, pool *pgxpool.Pool) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -210,7 +210,7 @@ func reportStats(ctx context.Context, logger *zap.Logger, statsd *statsd.Client,
 	}
 }
 
-func enqueueUsers(ctx context.Context, logger *zap.Logger, statsd *statsd.Client, pool *pgxpool.Pool, queue rmq.Queue) {
+func enqueueUsers(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterface, pool *pgxpool.Pool, queue rmq.Queue) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -265,7 +265,7 @@ func enqueueUsers(ctx context.Context, logger *zap.Logger, statsd *statsd.Client
 	}
 }
 
-func enqueueSubreddits(ctx context.Context, logger *zap.Logger, statsd *statsd.Client, pool *pgxpool.Pool, queues []rmq.Queue) {
+func enqueueSubreddits(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterface, pool *pgxpool.Pool, queues []rmq.Queue) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -323,7 +323,7 @@ func enqueueSubreddits(ctx context.Context, logger *zap.Logger, statsd *statsd.C
 
 }
 
-func enqueueStuckAccounts(ctx context.Context, logger *zap.Logger, statsd *statsd.Client, pool *pgxpool.Pool, queue rmq.Queue) {
+func enqueueStuckAccounts(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterface, pool *pgxpool.Pool, queue rmq.Queue) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -379,7 +379,7 @@ func enqueueStuckAccounts(ctx context.Context, logger *zap.Logger, statsd *stats
 	}
 }
 
-func enqueueAccounts(ctx context.Context, logger *zap.Logger, statsd *statsd.Client, pool *pgxpool.Pool, redisConn *redis.Client, luaSha string, queue rmq.Queue) {
+func enqueueAccounts(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterface, pool *pgxpool.Pool, redisConn *redis.Client, luaSha string, queue rmq.Queue) {
 	if enqueueAccountsMutex.TryLock() {
 		defer enqueueAccountsMutex.Unlock()
 	} else {

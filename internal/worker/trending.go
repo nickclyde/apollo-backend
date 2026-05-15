@@ -29,7 +29,7 @@ type trendingWorker struct {
 
 	logger *zap.Logger
 	tracer trace.Tracer
-	statsd *statsd.Client
+	statsd statsd.ClientInterface
 	redis  *redis.Client
 	queue  rmq.Connection
 	reddit *reddit.Client
@@ -45,7 +45,7 @@ type trendingWorker struct {
 
 const trendingNotificationTitleFormat = "🔥 r/%s Trending"
 
-func NewTrendingWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd *statsd.Client, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
+func NewTrendingWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd statsd.ClientInterface, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
 	reddit := reddit.NewClient(
 		os.Getenv("REDDIT_CLIENT_ID"),
 		os.Getenv("REDDIT_CLIENT_SECRET"),

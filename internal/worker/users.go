@@ -28,7 +28,7 @@ type usersWorker struct {
 
 	logger *zap.Logger
 	tracer trace.Tracer
-	statsd *statsd.Client
+	statsd statsd.ClientInterface
 	db     *pgxpool.Pool
 	redis  *redis.Client
 	queue  rmq.Connection
@@ -45,7 +45,7 @@ type usersWorker struct {
 
 const userNotificationTitleFormat = "👨\u200d🚀 %s"
 
-func NewUsersWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd *statsd.Client, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
+func NewUsersWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd statsd.ClientInterface, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
 	reddit := reddit.NewClient(
 		os.Getenv("REDDIT_CLIENT_ID"),
 		os.Getenv("REDDIT_CLIENT_SECRET"),

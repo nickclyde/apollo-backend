@@ -113,7 +113,7 @@ func (a *api) createWatcherHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cwr.Type == "subreddit" || cwr.Type == "trending" {
-		ac := a.reddit.NewAuthenticatedClient(account.AccountID, account.RefreshToken, account.AccessToken)
+		ac := a.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: account.AccountID, RefreshToken: account.RefreshToken, AccessToken: account.AccessToken, ClientID: account.RedditClientID, ClientSecret: account.RedditClientSecret, UserAgent: account.RedditUserAgent})
 		srr, err := ac.SubredditAbout(ctx, cwr.Subreddit)
 		if err != nil {
 			a.errorResponse(w, r, 500, err)
@@ -156,7 +156,7 @@ func (a *api) createWatcherHandler(w http.ResponseWriter, r *http.Request) {
 
 		watcher.WatcheeID = sr.ID
 	} else if cwr.Type == "user" {
-		ac := a.reddit.NewAuthenticatedClient(account.AccountID, account.RefreshToken, account.AccessToken)
+		ac := a.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: account.AccountID, RefreshToken: account.RefreshToken, AccessToken: account.AccessToken, ClientID: account.RedditClientID, ClientSecret: account.RedditClientSecret, UserAgent: account.RedditUserAgent})
 		urr, err := ac.UserAbout(ctx, cwr.User)
 		if err != nil {
 			a.errorResponse(w, r, 500, err)
@@ -267,7 +267,7 @@ func (a *api) editWatcherHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			ac := a.reddit.NewAuthenticatedClient(account.AccountID, account.RefreshToken, account.AccessToken)
+			ac := a.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: account.AccountID, RefreshToken: account.RefreshToken, AccessToken: account.AccessToken, ClientID: account.RedditClientID, ClientSecret: account.RedditClientSecret, UserAgent: account.RedditUserAgent})
 			srr, err := ac.SubredditAbout(ctx, lsr)
 			if !srr.Public {
 				a.errorResponse(w, r, 403, reddit.ErrSubredditIsPrivate)

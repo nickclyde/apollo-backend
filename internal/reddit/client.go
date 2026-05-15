@@ -27,8 +27,6 @@ const (
 )
 
 type Client struct {
-	id          string
-	secret      string
 	tracer      trace.Tracer
 	client      *http.Client
 	pool        *fastjson.ParserPool
@@ -84,7 +82,7 @@ func PostIDFromContext(context string) string {
 	return ""
 }
 
-func NewClient(id, secret string, tracer trace.Tracer, statsd statsd.ClientInterface, redis *redis.Client, connLimit int, opts ...RequestOption) *Client {
+func NewClient(tracer trace.Tracer, statsd statsd.ClientInterface, redis *redis.Client, connLimit int, opts ...RequestOption) *Client {
 	pool := &fastjson.ParserPool{}
 
 	// Preallocate pool
@@ -108,8 +106,6 @@ func NewClient(id, secret string, tracer trace.Tracer, statsd statsd.ClientInter
 	}
 
 	return &Client{
-		id,
-		secret,
 		tracer,
 		httpClient,
 		pool,
@@ -125,22 +121,59 @@ type AuthenticatedClient struct {
 	redditId     string
 	refreshToken string
 	accessToken  string
+
+	clientID     string
+	clientSecret string
+	userAgent    string
 }
 
-func (rc *Client) NewAuthenticatedClient(redditId, refreshToken, accessToken string) *AuthenticatedClient {
-	if redditId == "" {
+// AuthCredentials bundles the per-account Reddit OAuth state the backend
+// needs to call Reddit's API on behalf of an account. ClientID, ClientSecret,
+// and UserAgent come from the account row (each sideloaded Apollo build
+// registers its own Reddit app and supplies these at registration time).
+type AuthCredentials struct {
+	RedditID     string
+	RefreshToken string
+	AccessToken  string
+	ClientID     string
+	ClientSecret string
+	UserAgent    string
+}
+
+func (rc *Client) NewAuthenticatedClient(creds AuthCredentials) *AuthenticatedClient {
+	if creds.RedditID == "" {
 		panic("requires a redditId")
 	}
 
-	if accessToken == "" {
+	if creds.AccessToken == "" {
 		panic("requires an access token")
 	}
 
-	if refreshToken == "" {
+	if creds.RefreshToken == "" {
 		panic("requires a refresh token")
 	}
 
-	return &AuthenticatedClient{rc, redditId, refreshToken, accessToken}
+	if creds.ClientID == "" {
+		panic("requires a Reddit OAuth client ID")
+	}
+
+	if creds.ClientSecret == "" {
+		panic("requires a Reddit OAuth client secret")
+	}
+
+	if creds.UserAgent == "" {
+		panic("requires a User-Agent")
+	}
+
+	return &AuthenticatedClient{
+		client:       rc,
+		redditId:     creds.RedditID,
+		refreshToken: creds.RefreshToken,
+		accessToken:  creds.AccessToken,
+		clientID:     creds.ClientID,
+		clientSecret: creds.ClientSecret,
+		userAgent:    creds.UserAgent,
+	}
 }
 
 func (rc *Client) doRequest(ctx context.Context, r *Request, errmap map[int]error) ([]byte, *RateLimitingInfo, error) {
@@ -315,6 +348,10 @@ func (rac *AuthenticatedClient) request(ctx context.Context, r *Request, errmap 
 		return nil, err
 	}
 
+	// Per-account User-Agent: Reddit requires the UA to match the registered
+	// OAuth app's owner, and each sideloaded Apollo build has its own.
+	r.userAgent = rac.userAgent
+
 	bb, rli, err := rac.client.doRequest(ctx, r, errmap)
 
 	if err != nil && err != ErrOauthRevoked && r.retry {
@@ -437,7 +474,7 @@ func (rac *AuthenticatedClient) RefreshTokens(ctx context.Context, opts ...Reque
 		WithURL("https://www.reddit.com/api/v1/access_token"),
 		WithBody("grant_type", "refresh_token"),
 		WithBody("refresh_token", rac.refreshToken),
-		WithBasicAuth(rac.client.id, rac.client.secret),
+		WithBasicAuth(rac.clientID, rac.clientSecret),
 	}...)
 	req := NewRequest(opts...)
 

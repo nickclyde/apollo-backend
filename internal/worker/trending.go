@@ -49,8 +49,6 @@ const trendingNotificationTitleFormat = "🔥 r/%s Trending"
 
 func NewTrendingWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd statsd.ClientInterface, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
 	reddit := reddit.NewClient(
-		os.Getenv("REDDIT_CLIENT_ID"),
-		os.Getenv("REDDIT_CLIENT_SECRET"),
 		tracer,
 		statsd,
 		redis,
@@ -181,7 +179,7 @@ func (tc *trendingConsumer) Consume(delivery rmq.Delivery) {
 	// Grab last month's top posts so we calculate a trending average
 	i := rand.Intn(len(watchers))
 	watcher := watchers[i]
-	rac := tc.reddit.NewAuthenticatedClient(watcher.Account.AccountID, watcher.Account.RefreshToken, watcher.Account.AccessToken)
+	rac := tc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: watcher.Account.AccountID, RefreshToken: watcher.Account.RefreshToken, AccessToken: watcher.Account.AccessToken, ClientID: watcher.Account.RedditClientID, ClientSecret: watcher.Account.RedditClientSecret, UserAgent: watcher.Account.RedditUserAgent})
 
 	tps, err := rac.SubredditTop(ctx, subreddit.Name, reddit.WithQuery("t", "week"), reddit.WithQuery("show", "all"), reddit.WithQuery("limit", "25"))
 	if err != nil {
@@ -223,7 +221,7 @@ func (tc *trendingConsumer) Consume(delivery rmq.Delivery) {
 	// Grab hot posts and filter out anything that's > 2 days old
 	i = rand.Intn(len(watchers))
 	watcher = watchers[i]
-	rac = tc.reddit.NewAuthenticatedClient(watcher.Account.AccountID, watcher.Account.RefreshToken, watcher.Account.AccessToken)
+	rac = tc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: watcher.Account.AccountID, RefreshToken: watcher.Account.RefreshToken, AccessToken: watcher.Account.AccessToken, ClientID: watcher.Account.RedditClientID, ClientSecret: watcher.Account.RedditClientSecret, UserAgent: watcher.Account.RedditUserAgent})
 
 	hps, err := rac.SubredditHot(ctx, subreddit.Name, reddit.WithQuery("show", "all"), reddit.WithQuery("always_show_media", "1"))
 	if err != nil {

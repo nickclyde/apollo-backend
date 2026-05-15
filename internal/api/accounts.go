@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -114,6 +115,96 @@ func (a *api) disassociateAccountHandler(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
+// accountRegistrationRequest is the explicit JSON shape the sideloaded
+// Apollo build (e.g. via JeffreyCA's tweak) POSTs at registration time.
+// It deliberately differs from domain.Account: counters, message cursors,
+// and database IDs are not user-controlled, and the per-account Reddit OAuth
+// credentials are mandatory.
+type accountRegistrationRequest struct {
+	Username     string `json:"username"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ClientID     string `json:"reddit_client_id"`
+	ClientSecret string `json:"reddit_client_secret"`
+	RedirectURI  string `json:"reddit_redirect_uri"`
+	UserAgent    string `json:"reddit_user_agent"`
+	Development  bool   `json:"development,omitempty"`
+}
+
+func (req *accountRegistrationRequest) toAccount() domain.Account {
+	return domain.Account{
+		Username:           req.Username,
+		AccessToken:        req.AccessToken,
+		RefreshToken:       req.RefreshToken,
+		Development:        req.Development,
+		RedditClientID:     req.ClientID,
+		RedditClientSecret: req.ClientSecret,
+		RedditRedirectURI:  req.RedirectURI,
+		RedditUserAgent:    req.UserAgent,
+	}
+}
+
+// registerAccount validates the supplied credentials by performing the same
+// refresh-and-me dance the original handler did, persists the account, and
+// associates it with the device. Shared by both registration handlers.
+func (a *api) registerAccount(ctx context.Context, req accountRegistrationRequest, dev *domain.Device) (domain.Account, int, error) {
+	acct := req.toAccount()
+
+	creds := reddit.AuthCredentials{
+		RedditID:     reddit.SkipRateLimiting,
+		RefreshToken: acct.RefreshToken,
+		AccessToken:  acct.AccessToken,
+		ClientID:     acct.RedditClientID,
+		ClientSecret: acct.RedditClientSecret,
+		UserAgent:    acct.RedditUserAgent,
+	}
+
+	rac := a.reddit.NewAuthenticatedClient(creds)
+	tokens, err := rac.RefreshTokens(ctx)
+	if err != nil {
+		return acct, 422, fmt.Errorf("failed to refresh tokens: %w", err)
+	}
+
+	acct.TokenExpiresAt = time.Now().Add(tokens.Expiry)
+	acct.RefreshToken = tokens.RefreshToken
+	acct.AccessToken = tokens.AccessToken
+
+	creds.RefreshToken = tokens.RefreshToken
+	creds.AccessToken = tokens.AccessToken
+	rac = a.reddit.NewAuthenticatedClient(creds)
+
+	me, err := rac.Me(ctx)
+	if err != nil {
+		return acct, 500, fmt.Errorf("failed to fetch user info: %w", err)
+	}
+
+	if me.NormalizedUsername() != acct.NormalizedUsername() {
+		return acct, 401, fmt.Errorf("wrong user: expected %s, got %s", me.NormalizedUsername(), acct.NormalizedUsername())
+	}
+
+	acct.AccountID = me.ID
+
+	mi, err := rac.MessageInbox(ctx, reddit.WithQuery("limit", "1"))
+	if err != nil {
+		return acct, 500, err
+	}
+
+	if mi.Count > 0 {
+		acct.LastMessageID = mi.Children[0].FullName()
+		acct.CheckCount = 1
+	}
+
+	if err := a.accountRepo.CreateOrUpdate(ctx, &acct); err != nil {
+		return acct, 422, err
+	}
+
+	if err := a.accountRepo.Associate(ctx, &acct, dev); err != nil {
+		return acct, 422, err
+	}
+
+	return acct, http.StatusOK, nil
+}
+
 func (a *api) upsertAccountsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -138,63 +229,17 @@ func (a *api) upsertAccountsHandler(w http.ResponseWriter, r *http.Request) {
 		accsMap[acc.NormalizedUsername()] = acc
 	}
 
-	var raccs []domain.Account
-	if err := json.NewDecoder(r.Body).Decode(&raccs); err != nil {
+	var reqs []accountRegistrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
 		a.errorResponse(w, r, 422, err)
 		return
 	}
-	for _, acc := range raccs {
-		delete(accsMap, acc.NormalizedUsername())
 
-		rac := a.reddit.NewAuthenticatedClient(reddit.SkipRateLimiting, acc.RefreshToken, acc.AccessToken)
-		tokens, err := rac.RefreshTokens(ctx)
-		if err != nil {
-			err := fmt.Errorf("failed to refresh tokens: %w", err)
-			a.errorResponse(w, r, 422, err)
-			return
-		}
+	for _, req := range reqs {
+		delete(accsMap, strings.ToLower(req.Username))
 
-		// Reset expiration timer
-		acc.TokenExpiresAt = time.Now().Add(tokens.Expiry)
-		acc.RefreshToken = tokens.RefreshToken
-		acc.AccessToken = tokens.AccessToken
-
-		rac = a.reddit.NewAuthenticatedClient(reddit.SkipRateLimiting, tokens.RefreshToken, tokens.AccessToken)
-		me, err := rac.Me(ctx)
-
-		if err != nil {
-			err = fmt.Errorf("failed to fetch user info: %w", err)
-			a.errorResponse(w, r, 422, err)
-			return
-		}
-
-		if me.NormalizedUsername() != acc.NormalizedUsername() {
-			err := fmt.Errorf("wrong user: expected %s, got %s", me.NormalizedUsername(), acc.NormalizedUsername())
-			a.errorResponse(w, r, 401, err)
-			return
-		}
-
-		// Set account ID from Reddit
-		acc.AccountID = me.ID
-
-		mi, err := rac.MessageInbox(ctx, reddit.WithQuery("limit", "1"))
-		if err != nil {
-			a.errorResponse(w, r, 500, err)
-			return
-		}
-
-		if mi.Count > 0 {
-			acc.LastMessageID = mi.Children[0].FullName()
-			acc.CheckCount = 1
-		}
-
-		if err := a.accountRepo.CreateOrUpdate(ctx, &acc); err != nil {
-			a.errorResponse(w, r, 422, err)
-			return
-		}
-
-		if err := a.accountRepo.Associate(ctx, &acc, &dev); err != nil {
-			a.errorResponse(w, r, 422, err)
+		if _, status, err := a.registerAccount(ctx, req, &dev); err != nil {
+			a.errorResponse(w, r, status, err)
 			return
 		}
 	}
@@ -212,59 +257,13 @@ func (a *api) upsertAccountHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 
-	var acct domain.Account
-
-	if err := json.NewDecoder(r.Body).Decode(&acct); err != nil {
+	var req accountRegistrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.logger.Error("failed to parse request json", zap.Error(err))
 		a.errorResponse(w, r, 422, err)
 		return
 	}
 
-	// Here we check whether the account is supplied with a valid token.
-	rac := a.reddit.NewAuthenticatedClient(reddit.SkipRateLimiting, acct.RefreshToken, acct.AccessToken)
-	tokens, err := rac.RefreshTokens(ctx)
-	if err != nil {
-		a.logger.Error("failed to refresh token", zap.Error(err))
-		a.errorResponse(w, r, 422, err)
-		return
-	}
-
-	// Reset expiration timer
-	acct.TokenExpiresAt = time.Now().Add(tokens.Expiry)
-	acct.RefreshToken = tokens.RefreshToken
-	acct.AccessToken = tokens.AccessToken
-
-	rac = a.reddit.NewAuthenticatedClient(reddit.SkipRateLimiting, acct.RefreshToken, acct.AccessToken)
-	me, err := rac.Me(ctx)
-
-	if err != nil {
-		a.logger.Error("failed to grab user details from reddit", zap.Error(err))
-		a.errorResponse(w, r, 500, err)
-		return
-	}
-
-	if me.NormalizedUsername() != acct.NormalizedUsername() {
-		err := fmt.Errorf("wrong user: expected %s, got %s", me.NormalizedUsername(), acct.NormalizedUsername())
-		a.logger.Warn("user is not who they say they are", zap.Error(err))
-		a.errorResponse(w, r, 401, err)
-		return
-	}
-
-	// Set account ID from Reddit
-	acct.AccountID = me.ID
-
-	mi, err := rac.MessageInbox(ctx, reddit.WithQuery("limit", "1"))
-	if err != nil {
-		a.errorResponse(w, r, 500, err)
-		return
-	}
-
-	if mi.Count > 0 {
-		acct.LastMessageID = mi.Children[0].FullName()
-		acct.CheckCount = 1
-	}
-
-	// Associate
 	dev, err := a.deviceRepo.GetByAPNSToken(ctx, vars["apns"])
 	if err != nil {
 		a.logger.Error("failed to fetch device from database", zap.Error(err))
@@ -272,16 +271,9 @@ func (a *api) upsertAccountHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upsert account
-	if err := a.accountRepo.CreateOrUpdate(ctx, &acct); err != nil {
-		a.logger.Error("failed to update account", zap.Error(err))
-		a.errorResponse(w, r, 500, err)
-		return
-	}
-
-	if err := a.accountRepo.Associate(ctx, &acct, &dev); err != nil {
-		a.logger.Error("failed to associate account with device", zap.Error(err))
-		a.errorResponse(w, r, 500, err)
+	if _, status, err := a.registerAccount(ctx, req, &dev); err != nil {
+		a.logger.Error("failed to register account", zap.Error(err))
+		a.errorResponse(w, r, status, err)
 		return
 	}
 

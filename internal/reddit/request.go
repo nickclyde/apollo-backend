@@ -9,7 +9,10 @@ import (
 	"strings"
 )
 
-const userAgent = "apollo-backend-selfhost/0.1"
+// defaultUserAgent is used for any request without an explicit per-account
+// User-Agent. Authenticated calls always set their own via WithUserAgent
+// (Reddit requires the UA to match the registered OAuth app's owner).
+const defaultUserAgent = "apollo-backend-selfhost/0.1"
 
 type Request struct {
 	body               url.Values
@@ -18,6 +21,7 @@ type Request struct {
 	token              string
 	url                string
 	auth               string
+	userAgent          string
 	tags               []string
 	emptyResponseBytes int
 	retry              bool
@@ -57,7 +61,11 @@ func (r *Request) HTTPRequest(ctx context.Context) (*http.Request, error) {
 	req.URL.RawQuery = r.query.Encode()
 
 	req.Header.Add("Accept", "application/json")
-	req.Header.Add("User-Agent", userAgent)
+	ua := r.userAgent
+	if ua == "" {
+		ua = defaultUserAgent
+	}
+	req.Header.Add("User-Agent", ua)
 
 	if r.token != "" {
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
@@ -92,6 +100,12 @@ func WithBasicAuth(user, password string) RequestOption {
 	return func(req *Request) {
 		encoded := base64.StdEncoding.EncodeToString([]byte(user + ":" + password))
 		req.auth = encoded
+	}
+}
+
+func WithUserAgent(ua string) RequestOption {
+	return func(req *Request) {
+		req.userAgent = ua
 	}
 }
 

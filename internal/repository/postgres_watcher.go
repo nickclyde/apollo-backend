@@ -50,6 +50,9 @@ func (p *postgresWatcherRepository) fetch(ctx context.Context, query string, arg
 			&watcher.Account.AccountID,
 			&watcher.Account.AccessToken,
 			&watcher.Account.RefreshToken,
+			&watcher.Account.RedditClientID,
+			&watcher.Account.RedditClientSecret,
+			&watcher.Account.RedditUserAgent,
 			&subredditLabel,
 			&userLabel,
 		); err != nil {
@@ -93,6 +96,9 @@ func (p *postgresWatcherRepository) GetByID(ctx context.Context, id int64) (doma
 			accounts.reddit_account_id,
 			accounts.access_token,
 			accounts.refresh_token,
+			accounts.reddit_client_id,
+			accounts.reddit_client_secret,
+			accounts.reddit_user_agent,
 			COALESCE(subreddits.name, '') AS subreddit_label,
 			COALESCE(users.name, '') AS user_label
 		FROM watchers
@@ -138,6 +144,9 @@ func (p *postgresWatcherRepository) GetByTypeAndWatcheeID(ctx context.Context, t
 			accounts.reddit_account_id,
 			accounts.access_token,
 			accounts.refresh_token,
+			accounts.reddit_client_id,
+			accounts.reddit_client_secret,
+			accounts.reddit_user_agent,
 			COALESCE(subreddits.name, '') AS subreddit_label,
 			COALESCE(users.name, '') AS user_label
 		FROM watchers
@@ -191,6 +200,9 @@ func (p *postgresWatcherRepository) GetByDeviceAPNSTokenAndAccountRedditID(ctx c
 			accounts.reddit_account_id,
 			accounts.access_token,
 			accounts.refresh_token,
+			accounts.reddit_client_id,
+			accounts.reddit_client_secret,
+			accounts.reddit_user_agent,
 			COALESCE(subreddits.name, '') AS subreddit_label,
 			COALESCE(users.name, '') AS user_label
 		FROM watchers

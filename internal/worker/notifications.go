@@ -56,8 +56,6 @@ type notificationsWorker struct {
 
 func NewNotificationsWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd statsd.ClientInterface, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
 	reddit := reddit.NewClient(
-		os.Getenv("REDDIT_CLIENT_ID"),
-		os.Getenv("REDDIT_CLIENT_SECRET"),
 		tracer,
 		statsd,
 		redis,
@@ -195,7 +193,7 @@ func (nc *notificationsConsumer) Consume(delivery rmq.Delivery) {
 		return
 	}
 
-	rac := nc.reddit.NewAuthenticatedClient(account.AccountID, account.RefreshToken, account.AccessToken)
+	rac := nc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: account.AccountID, RefreshToken: account.RefreshToken, AccessToken: account.AccessToken, ClientID: account.RedditClientID, ClientSecret: account.RedditClientSecret, UserAgent: account.RedditUserAgent})
 	logger = logger.With(
 		zap.String("account#username", account.NormalizedUsername()),
 		zap.String("account#access_token", rac.ObfuscatedAccessToken()),
@@ -225,7 +223,7 @@ func (nc *notificationsConsumer) Consume(delivery rmq.Delivery) {
 		_ = nc.accountRepo.Update(ctx, &account)
 
 		// Refresh client
-		rac = nc.reddit.NewAuthenticatedClient(account.AccountID, tokens.RefreshToken, tokens.AccessToken)
+		rac = nc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: account.AccountID, RefreshToken: tokens.RefreshToken, AccessToken: tokens.AccessToken, ClientID: account.RedditClientID, ClientSecret: account.RedditClientSecret, UserAgent: account.RedditUserAgent})
 		logger = logger.With(
 			zap.String("account#access_token", rac.ObfuscatedAccessToken()),
 			zap.String("account#refresh_token", rac.ObfuscatedRefreshToken()),

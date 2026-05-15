@@ -27,6 +27,14 @@ type Account struct {
 	TokenExpiresAt time.Time
 	Development    bool
 
+	// Per-account Reddit OAuth client credentials. Each sideloaded Apollo build
+	// registers its own Reddit application; we store the credentials needed to
+	// exchange refresh tokens and call Reddit's API on behalf of this account.
+	RedditClientID     string
+	RedditClientSecret string
+	RedditRedirectURI  string // accepted at registration but only used for diagnostics
+	RedditUserAgent    string
+
 	// Tracking how far behind we are
 	LastMessageID                string
 	NextNotificationCheckAt      time.Time
@@ -42,6 +50,9 @@ func (acct *Account) Validate() error {
 	return validation.ValidateStruct(acct,
 		validation.Field(&acct.Username, validation.Required, validation.Length(3, 32)),
 		validation.Field(&acct.AccountID, validation.Required, validation.Length(4, 9)),
+		validation.Field(&acct.RedditClientID, validation.Required),
+		validation.Field(&acct.RedditClientSecret, validation.Required),
+		validation.Field(&acct.RedditUserAgent, validation.Required),
 	)
 }
 

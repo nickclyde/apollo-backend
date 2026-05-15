@@ -49,8 +49,6 @@ const userNotificationTitleFormat = "👨\u200d🚀 %s"
 
 func NewUsersWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd statsd.ClientInterface, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
 	reddit := reddit.NewClient(
-		os.Getenv("REDDIT_CLIENT_ID"),
-		os.Getenv("REDDIT_CLIENT_SECRET"),
 		tracer,
 		statsd,
 		redis,
@@ -184,7 +182,7 @@ func (uc *usersConsumer) Consume(delivery rmq.Delivery) {
 	watcher := watchers[i]
 
 	acc, _ := uc.accountRepo.GetByID(ctx, watcher.AccountID)
-	rac := uc.reddit.NewAuthenticatedClient(acc.AccountID, acc.RefreshToken, acc.AccessToken)
+	rac := uc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: acc.AccountID, RefreshToken: acc.RefreshToken, AccessToken: acc.AccessToken, ClientID: acc.RedditClientID, ClientSecret: acc.RedditClientSecret, UserAgent: acc.RedditUserAgent})
 
 	ru, err := rac.UserAbout(ctx, user.Name)
 	if err != nil {

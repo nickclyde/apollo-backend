@@ -10,7 +10,11 @@ CREATE TABLE accounts (
     next_stuck_notification_check_at timestamp without time zone,
     check_count integer DEFAULT 0,
     is_deleted boolean DEFAULT FALSE,
-    development boolean DEFAULT FALSE
+    development boolean DEFAULT FALSE,
+    reddit_client_id character varying(64) NOT NULL DEFAULT '',
+    reddit_client_secret character varying(128) NOT NULL DEFAULT '',
+    reddit_redirect_uri character varying(255) NOT NULL DEFAULT '',
+    reddit_user_agent character varying(255) NOT NULL DEFAULT ''
 );
 
 CREATE TABLE devices (

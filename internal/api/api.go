@@ -42,8 +42,6 @@ func NewAPI(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterfa
 	tracer := otel.Tracer("api")
 
 	reddit := reddit.NewClient(
-		os.Getenv("REDDIT_CLIENT_ID"),
-		os.Getenv("REDDIT_CLIENT_SECRET"),
 		tracer,
 		statsd,
 		redis,
@@ -100,7 +98,14 @@ func (a *api) Routes() *mux.Router {
 
 	r.HandleFunc("/v1/health", a.healthCheckHandler).Methods("GET")
 
-	r.HandleFunc("/v1/device", a.upsertDeviceHandler).Methods("POST")
+	// Registration endpoints — gated by REGISTRATION_SECRET if set so a public
+	// instance isn't open to drive-by signups.
+	reg := r.PathPrefix("/v1").Subrouter()
+	reg.Use(a.registrationAuthMiddleware)
+	reg.HandleFunc("/device", a.upsertDeviceHandler).Methods("POST")
+	reg.HandleFunc("/device/{apns}/account", a.upsertAccountHandler).Methods("POST")
+	reg.HandleFunc("/device/{apns}/accounts", a.upsertAccountsHandler).Methods("POST")
+
 	r.HandleFunc("/v1/device/{apns}", a.deleteDeviceHandler).Methods("DELETE")
 	r.HandleFunc("/v1/device/{apns}/test", a.testDeviceHandler).Methods("POST")
 	r.HandleFunc("/v1/device/{apns}/test/comment_reply", generateNotificationTester(a, commentReply)).Methods("POST")
@@ -110,8 +115,6 @@ func (a *api) Routes() *mux.Router {
 	r.HandleFunc("/v1/device/{apns}/test/trending_post", generateNotificationTester(a, trendingPost)).Methods("POST")
 	r.HandleFunc("/v1/device/{apns}/test/username_mention", generateNotificationTester(a, usernameMention)).Methods("POST")
 
-	r.HandleFunc("/v1/device/{apns}/account", a.upsertAccountHandler).Methods("POST")
-	r.HandleFunc("/v1/device/{apns}/accounts", a.upsertAccountsHandler).Methods("POST")
 	r.HandleFunc("/v1/device/{apns}/account/{redditID}", a.disassociateAccountHandler).Methods("DELETE")
 	r.HandleFunc("/v1/device/{apns}/account/{redditID}/notifications", a.notificationsAccountHandler).Methods("PATCH")
 	r.HandleFunc("/v1/device/{apns}/account/{redditID}/notifications", a.getNotificationsAccountHandler).Methods("GET")
@@ -125,6 +128,24 @@ func (a *api) Routes() *mux.Router {
 	r.Use(a.requestIdMiddleware)
 
 	return r
+}
+
+// registrationAuthMiddleware gates registration endpoints behind the
+// REGISTRATION_SECRET env var when set. If unset, the endpoints are open
+// (intended for local dev / private-network deployments).
+func (a *api) registrationAuthMiddleware(next http.Handler) http.Handler {
+	secret := os.Getenv("REGISTRATION_SECRET")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if secret == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Header.Get("X-Registration-Token") != secret {
+			a.errorResponse(w, r, http.StatusUnauthorized, fmt.Errorf("missing or invalid registration token"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 type LoggingResponseWriter struct {

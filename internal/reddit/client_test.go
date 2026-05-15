@@ -13,7 +13,7 @@ func TestAuthenticatedClientObfuscatedToken(t *testing.T) {
 	t.Parallel()
 
 	tracer := otel.Tracer("test")
-	rc := reddit.NewClient("<SECRET>", "<SECRET>", tracer, nil, nil, 1)
+	rc := reddit.NewClient(tracer, nil, nil, 1)
 
 	type test struct {
 		have string
@@ -27,7 +27,14 @@ func TestAuthenticatedClientObfuscatedToken(t *testing.T) {
 
 	for _, tc := range tests {
 		tc := tc
-		rac := rc.NewAuthenticatedClient("<ID>", "<REFRESH>", tc.have)
+		rac := rc.NewAuthenticatedClient(reddit.AuthCredentials{
+			RedditID:     "<ID>",
+			RefreshToken: "<REFRESH>",
+			AccessToken:  tc.have,
+			ClientID:     "<CLIENT>",
+			ClientSecret: "<SECRET>",
+			UserAgent:    "test/1.0",
+		})
 		got := rac.ObfuscatedAccessToken()
 
 		assert.Equal(t, tc.want, got)

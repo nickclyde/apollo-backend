@@ -53,8 +53,6 @@ const (
 
 func NewSubredditsWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd statsd.ClientInterface, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
 	reddit := reddit.NewClient(
-		os.Getenv("REDDIT_CLIENT_ID"),
-		os.Getenv("REDDIT_CLIENT_SECRET"),
 		tracer,
 		statsd,
 		redis,
@@ -205,7 +203,7 @@ func (sc *subredditsConsumer) Consume(delivery rmq.Delivery) {
 		i := rand.Intn(len(watchers))
 		watcher := watchers[i]
 
-		rac := sc.reddit.NewAuthenticatedClient(watcher.Account.AccountID, watcher.Account.RefreshToken, watcher.Account.AccessToken)
+		rac := sc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: watcher.Account.AccountID, RefreshToken: watcher.Account.RefreshToken, AccessToken: watcher.Account.AccessToken, ClientID: watcher.Account.RedditClientID, ClientSecret: watcher.Account.RedditClientSecret, UserAgent: watcher.Account.RedditUserAgent})
 		sps, err := rac.SubredditNew(ctx,
 			subreddit.Name,
 			reddit.WithQuery("before", before),
@@ -291,7 +289,7 @@ func (sc *subredditsConsumer) Consume(delivery rmq.Delivery) {
 		i := rand.Intn(len(watchers))
 		watcher := watchers[i]
 
-		rac := sc.reddit.NewAuthenticatedClient(watcher.Account.AccountID, watcher.Account.RefreshToken, watcher.Account.AccessToken)
+		rac := sc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: watcher.Account.AccountID, RefreshToken: watcher.Account.RefreshToken, AccessToken: watcher.Account.AccessToken, ClientID: watcher.Account.RedditClientID, ClientSecret: watcher.Account.RedditClientSecret, UserAgent: watcher.Account.RedditUserAgent})
 		sps, err := rac.SubredditHot(ctx,
 			subreddit.Name,
 			reddit.WithQuery("limit", "100"),

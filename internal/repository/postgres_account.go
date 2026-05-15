@@ -22,6 +22,11 @@ func NewPostgresAccount(conn Connection) domain.AccountRepository {
 	return &postgresAccountRepository{conn: conn, tracer: tracer}
 }
 
+const accountSelectColumns = `id, username, reddit_account_id, access_token, refresh_token, token_expires_at,
+	last_message_id, next_notification_check_at, next_stuck_notification_check_at,
+	check_count, development,
+	reddit_client_id, reddit_client_secret, reddit_redirect_uri, reddit_user_agent`
+
 func (p *postgresAccountRepository) fetch(ctx context.Context, query string, args ...interface{}) ([]domain.Account, error) {
 	ctx, span := spanWithQuery(ctx, p.tracer, query)
 	defer span.End()
@@ -49,6 +54,10 @@ func (p *postgresAccountRepository) fetch(ctx context.Context, query string, arg
 			&acc.NextStuckNotificationCheckAt,
 			&acc.CheckCount,
 			&acc.Development,
+			&acc.RedditClientID,
+			&acc.RedditClientSecret,
+			&acc.RedditRedirectURI,
+			&acc.RedditUserAgent,
 		); err != nil {
 			return nil, err
 		}
@@ -59,9 +68,7 @@ func (p *postgresAccountRepository) fetch(ctx context.Context, query string, arg
 
 func (p *postgresAccountRepository) GetByID(ctx context.Context, id int64) (domain.Account, error) {
 	query := `
-		SELECT id, username, reddit_account_id, access_token, refresh_token, token_expires_at,
-			last_message_id, next_notification_check_at, next_stuck_notification_check_at,
-			check_count, development
+		SELECT ` + accountSelectColumns + `
 		FROM accounts
 		WHERE id = $1 AND is_deleted IS FALSE`
 
@@ -78,9 +85,7 @@ func (p *postgresAccountRepository) GetByID(ctx context.Context, id int64) (doma
 
 func (p *postgresAccountRepository) GetByRedditID(ctx context.Context, id string) (domain.Account, error) {
 	query := `
-		SELECT id, username, reddit_account_id, access_token, refresh_token, token_expires_at,
-			last_message_id, next_notification_check_at, next_stuck_notification_check_at,
-			check_count, development
+		SELECT ` + accountSelectColumns + `
 		FROM accounts
 		WHERE reddit_account_id = $1 AND is_deleted IS FALSE`
 
@@ -95,17 +100,23 @@ func (p *postgresAccountRepository) GetByRedditID(ctx context.Context, id string
 
 	return accs[0], nil
 }
+
 func (p *postgresAccountRepository) CreateOrUpdate(ctx context.Context, acc *domain.Account) error {
 	query := `
 		INSERT INTO accounts (username, reddit_account_id, access_token, refresh_token, token_expires_at,
-			last_message_id, next_notification_check_at, next_stuck_notification_check_at, is_deleted, development)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE, $7)
+			last_message_id, next_notification_check_at, next_stuck_notification_check_at, is_deleted, development,
+			reddit_client_id, reddit_client_secret, reddit_redirect_uri, reddit_user_agent)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE, $7, $8, $9, $10, $11)
 		ON CONFLICT(username) DO
 			UPDATE SET access_token = $3,
 				refresh_token = $4,
 				token_expires_at = $5,
 				last_message_id = $6,
-				is_deleted = FALSE
+				is_deleted = FALSE,
+				reddit_client_id = $8,
+				reddit_client_secret = $9,
+				reddit_redirect_uri = $10,
+				reddit_user_agent = $11
 		RETURNING id`
 
 	ctx, span := spanWithQuery(ctx, p.tracer, query)
@@ -121,6 +132,10 @@ func (p *postgresAccountRepository) CreateOrUpdate(ctx context.Context, acc *dom
 		acc.TokenExpiresAt,
 		acc.LastMessageID,
 		acc.Development,
+		acc.RedditClientID,
+		acc.RedditClientSecret,
+		acc.RedditRedirectURI,
+		acc.RedditUserAgent,
 	).Scan(&acc.ID); err != nil {
 		span.SetStatus(codes.Error, "failed upserting account")
 		span.RecordError(err)
@@ -134,8 +149,9 @@ func (p *postgresAccountRepository) Create(ctx context.Context, acc *domain.Acco
 	query := `
 		INSERT INTO accounts
 			(username, reddit_account_id, access_token, refresh_token, token_expires_at,
-			last_message_id, next_notification_check_at, next_stuck_notification_check_at, is_deleted, development)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9)
+			last_message_id, next_notification_check_at, next_stuck_notification_check_at, is_deleted, development,
+			reddit_client_id, reddit_client_secret, reddit_redirect_uri, reddit_user_agent)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9, $10, $11, $12, $13)
 		RETURNING id`
 
 	ctx, span := spanWithQuery(ctx, p.tracer, query)
@@ -153,6 +169,10 @@ func (p *postgresAccountRepository) Create(ctx context.Context, acc *domain.Acco
 		acc.NextNotificationCheckAt,
 		acc.NextStuckNotificationCheckAt,
 		acc.Development,
+		acc.RedditClientID,
+		acc.RedditClientSecret,
+		acc.RedditRedirectURI,
+		acc.RedditUserAgent,
 	).Scan(&acc.ID); err != nil {
 		span.SetStatus(codes.Error, "failed inserting account")
 		span.RecordError(err)
@@ -174,7 +194,11 @@ func (p *postgresAccountRepository) Update(ctx context.Context, acc *domain.Acco
 			next_notification_check_at = $8,
 			next_stuck_notification_check_at = $9,
 			check_count = $10,
-			development = $11
+			development = $11,
+			reddit_client_id = $12,
+			reddit_client_secret = $13,
+			reddit_redirect_uri = $14,
+			reddit_user_agent = $15
 		WHERE id = $1`
 
 	ctx, span := spanWithQuery(ctx, p.tracer, query)
@@ -194,6 +218,10 @@ func (p *postgresAccountRepository) Update(ctx context.Context, acc *domain.Acco
 		acc.NextStuckNotificationCheckAt,
 		acc.CheckCount,
 		acc.Development,
+		acc.RedditClientID,
+		acc.RedditClientSecret,
+		acc.RedditRedirectURI,
+		acc.RedditUserAgent,
 	); err != nil {
 		span.SetStatus(codes.Error, "failed to update account")
 		span.RecordError(err)
@@ -253,7 +281,8 @@ func (p *postgresAccountRepository) GetByAPNSToken(ctx context.Context, token st
 	query := `
 		SELECT accounts.id, username, accounts.reddit_account_id, access_token, refresh_token, token_expires_at,
 			last_message_id, next_notification_check_at, next_stuck_notification_check_at,
-			check_count, development
+			check_count, development,
+			reddit_client_id, reddit_client_secret, reddit_redirect_uri, reddit_user_agent
 		FROM accounts
 		INNER JOIN devices_accounts ON accounts.id = devices_accounts.account_id
 		INNER JOIN devices ON devices.id = devices_accounts.device_id

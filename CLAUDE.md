@@ -50,3 +50,10 @@ Postgres is reached through PgBouncer in transaction mode, so `cmdutil.NewDataba
 - `gochecknoinits` is on — don't add `init()` functions.
 - Observability is opt-in: every process builds a `zap.Logger`, a statsd client (`statsd.ClientInterface` — a `NoOpClient` when `STATSD_URL` is unset), and an OpenTelemetry tracer via Honeycomb's launcher (also no-op without env vars). New code paths in the request/job hot path should still emit a statsd metric — it's free when disabled.
 - Worker consumer counts are sized off `--consumers`; the DB pool gets `consumers/16`, locks Redis `consumers/4`, queue Redis `consumers/16`. Keep those ratios in mind if you change pool tuning.
+
+## Single-tenant self-hosting model
+
+- One deployment serves one sideloaded Apollo build. The APNs topic is configured per-deployment via `APPLE_APNS_TOPIC` (the build's bundle ID); `cmdutil.APNSTopic()` reads it and panics on startup if unset.
+- Reddit OAuth credentials are **per-account**, not per-deployment. Each row in `accounts` carries its own `reddit_client_id` / `reddit_client_secret` / `reddit_user_agent` / `reddit_redirect_uri`. The tweak sends these at registration time. The process-level `reddit.Client` carries no credentials; `AuthenticatedClient` holds them and `RefreshTokens` uses Basic auth with the per-account client_id/secret.
+- Registration endpoints (`POST /v1/device`, `POST /v1/device/{apns}/account`, `POST /v1/device/{apns}/accounts`) are gated by `REGISTRATION_SECRET` when set — clients must send it as `X-Registration-Token`. When unset, registration is open (intended for local dev or private-network instances).
+- The iOS-app-facing registration payload is the explicit `accountRegistrationRequest` struct in `internal/api/accounts.go`, not `domain.Account` directly — counters and DB IDs are not user-controlled.

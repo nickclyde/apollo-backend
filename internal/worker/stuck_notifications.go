@@ -37,8 +37,6 @@ type stuckNotificationsWorker struct {
 
 func NewStuckNotificationsWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer, statsd statsd.ClientInterface, db *pgxpool.Pool, redis *redis.Client, queue rmq.Connection, consumers int) Worker {
 	reddit := reddit.NewClient(
-		os.Getenv("REDDIT_CLIENT_ID"),
-		os.Getenv("REDDIT_CLIENT_SECRET"),
 		tracer,
 		statsd,
 		redis,
@@ -140,7 +138,7 @@ func (snc *stuckNotificationsConsumer) Consume(delivery rmq.Delivery) {
 		return
 	}
 
-	rac := snc.reddit.NewAuthenticatedClient(account.AccountID, account.RefreshToken, account.AccessToken)
+	rac := snc.reddit.NewAuthenticatedClient(reddit.AuthCredentials{RedditID: account.AccountID, RefreshToken: account.RefreshToken, AccessToken: account.AccessToken, ClientID: account.RedditClientID, ClientSecret: account.RedditClientSecret, UserAgent: account.RedditUserAgent})
 
 	snc.logger.Debug("fetching last thing",
 		zap.Int64("account#id", id),

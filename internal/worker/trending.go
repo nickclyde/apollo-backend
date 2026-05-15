@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/christianselig/apollo-backend/internal/cmdutil"
 	"github.com/christianselig/apollo-backend/internal/domain"
 	"github.com/christianselig/apollo-backend/internal/reddit"
 	"github.com/christianselig/apollo-backend/internal/repository"
@@ -34,6 +35,7 @@ type trendingWorker struct {
 	queue  rmq.Connection
 	reddit *reddit.Client
 	apns   *token.Token
+	apnsTopic string
 
 	consumers int
 
@@ -78,6 +80,7 @@ func NewTrendingWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tra
 		queue,
 		reddit,
 		apns,
+		cmdutil.APNSTopic(),
 		consumers,
 
 		repository.NewPostgresAccount(db),
@@ -250,7 +253,7 @@ func (tc *trendingConsumer) Consume(delivery rmq.Delivery) {
 		}
 
 		notification := &apns2.Notification{}
-		notification.Topic = "com.christianselig.Apollo"
+		notification.Topic = tc.apnsTopic
 		notification.Payload = payloadFromTrendingPost(post)
 
 		for _, watcher := range watchers {

@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/christianselig/apollo-backend/internal/cmdutil"
 	"github.com/christianselig/apollo-backend/internal/domain"
 	"github.com/christianselig/apollo-backend/internal/reddit"
 	"github.com/christianselig/apollo-backend/internal/repository"
@@ -34,6 +35,7 @@ type usersWorker struct {
 	queue  rmq.Connection
 	reddit *reddit.Client
 	apns   *token.Token
+	apnsTopic string
 
 	consumers int
 
@@ -79,6 +81,7 @@ func NewUsersWorker(ctx context.Context, logger *zap.Logger, tracer trace.Tracer
 		queue,
 		reddit,
 		apns,
+		cmdutil.APNSTopic(),
 		consumers,
 
 		repository.NewPostgresAccount(db),
@@ -261,7 +264,7 @@ func (uc *usersConsumer) Consume(delivery rmq.Delivery) {
 		payload := payloadFromUserPost(post)
 
 		notification := &apns2.Notification{}
-		notification.Topic = "com.christianselig.Apollo"
+		notification.Topic = uc.apnsTopic
 
 		for _, watcher := range notifs {
 			if err := uc.watcherRepo.IncrementHits(ctx, watcher.ID); err != nil {

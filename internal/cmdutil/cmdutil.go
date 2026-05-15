@@ -30,6 +30,17 @@ func NewLogger(service string) *zap.Logger {
 	return logger
 }
 
+// APNSTopic returns the configured APNs topic (bundle ID of the sideloaded
+// Apollo build). Panics if APPLE_APNS_TOPIC is unset — there's no sensible
+// default since the bundle ID is per-deployment.
+func APNSTopic() string {
+	topic := os.Getenv("APPLE_APNS_TOPIC")
+	if topic == "" {
+		panic("APPLE_APNS_TOPIC env var is required (bundle ID of the sideloaded Apollo build)")
+	}
+	return topic
+}
+
 func NewStatsdClient(tags ...string) (statsd.ClientInterface, error) {
 	url := os.Getenv("STATSD_URL")
 	if url == "" {

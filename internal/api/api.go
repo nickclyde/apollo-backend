@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 
+	"github.com/christianselig/apollo-backend/internal/cmdutil"
 	"github.com/christianselig/apollo-backend/internal/domain"
 	"github.com/christianselig/apollo-backend/internal/reddit"
 	"github.com/christianselig/apollo-backend/internal/repository"
@@ -27,6 +28,7 @@ type api struct {
 	statsd     statsd.ClientInterface
 	reddit     *reddit.Client
 	apns       *token.Token
+	apnsTopic  string
 	httpClient *http.Client
 
 	accountRepo   domain.AccountRepository
@@ -75,6 +77,7 @@ func NewAPI(ctx context.Context, logger *zap.Logger, statsd statsd.ClientInterfa
 		statsd:     statsd,
 		reddit:     reddit,
 		apns:       apns,
+		apnsTopic:  cmdutil.APNSTopic(),
 		httpClient: client,
 
 		accountRepo:   accountRepo,

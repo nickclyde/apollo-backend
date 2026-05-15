@@ -46,7 +46,7 @@ func generateNotificationTester(a *api, fun notificationGenerator) func(w http.R
 		fun(p)
 
 		notification := &apns2.Notification{}
-		notification.Topic = "com.christianselig.Apollo"
+		notification.Topic = a.apnsTopic
 		notification.DeviceToken = d.APNSToken
 		notification.Payload = p
 

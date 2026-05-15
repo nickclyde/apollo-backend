@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/christianselig/apollo-backend/internal/cmdutil"
 	"github.com/christianselig/apollo-backend/internal/domain"
 	"github.com/christianselig/apollo-backend/internal/reddit"
 	"github.com/christianselig/apollo-backend/internal/repository"
@@ -45,6 +46,7 @@ type notificationsWorker struct {
 	queue  rmq.Connection
 	reddit *reddit.Client
 	apns   *token.Token
+	apnsTopic string
 
 	consumers int
 
@@ -86,6 +88,7 @@ func NewNotificationsWorker(ctx context.Context, logger *zap.Logger, tracer trac
 		queue,
 		reddit,
 		apns,
+		cmdutil.APNSTopic(),
 		consumers,
 
 		repository.NewPostgresAccount(db),
@@ -303,7 +306,7 @@ func (nc *notificationsConsumer) Consume(delivery rmq.Delivery) {
 		_ = nc.statsd.Histogram("apollo.queue.delay", float64(latency.Milliseconds()), []string{}, 0.1)
 
 		notification := &apns2.Notification{}
-		notification.Topic = "com.christianselig.Apollo"
+		notification.Topic = nc.apnsTopic
 		notification.Payload = payloadFromMessage(account, msg, msgs.Count)
 
 		client := nc.papns

@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/christianselig/apollo-backend/internal/cmdutil"
 	"github.com/christianselig/apollo-backend/internal/domain"
 	"github.com/christianselig/apollo-backend/internal/reddit"
 	"github.com/christianselig/apollo-backend/internal/repository"
@@ -35,6 +36,7 @@ type subredditsWorker struct {
 	queue  rmq.Connection
 	reddit *reddit.Client
 	apns   *token.Token
+	apnsTopic string
 
 	consumers int
 
@@ -83,6 +85,7 @@ func NewSubredditsWorker(ctx context.Context, logger *zap.Logger, tracer trace.T
 		queue,
 		reddit,
 		apns,
+		cmdutil.APNSTopic(),
 		consumers,
 
 		repository.NewPostgresAccount(db),
@@ -435,7 +438,7 @@ func (sc *subredditsConsumer) Consume(delivery rmq.Delivery) {
 			payload.AlertBody(body)
 
 			notification := &apns2.Notification{}
-			notification.Topic = "com.christianselig.Apollo"
+			notification.Topic = sc.apnsTopic
 			notification.DeviceToken = watcher.Device.APNSToken
 			notification.Payload = payload
 

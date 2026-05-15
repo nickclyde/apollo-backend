@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const userAgent = "server:apollo-backend:v1.0 (by /u/iamthatis) contact me@christianselig.com"
+const userAgent = "apollo-backend-selfhost/0.1"
 
 type Request struct {
 	body               url.Values

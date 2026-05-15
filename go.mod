@@ -19,7 +19,6 @@ require (
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
 	github.com/sideshow/apns2 v0.23.0
-	github.com/smtp2go-oss/smtp2go-go v1.0.2
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.2
 	github.com/valyala/fastjson v1.6.4

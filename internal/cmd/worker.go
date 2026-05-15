@@ -14,7 +14,6 @@ import (
 
 var (
 	queues = map[string]worker.NewWorkerFn{
-		"live-activities":     worker.NewLiveActivitiesWorker,
 		"notifications":       worker.NewNotificationsWorker,
 		"stuck-notifications": worker.NewStuckNotificationsWorker,
 		"subreddits":          worker.NewSubredditsWorker,

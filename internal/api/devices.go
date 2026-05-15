@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/gorilla/mux"
@@ -28,9 +27,6 @@ func (a *api) upsertDeviceHandler(w http.ResponseWriter, r *http.Request) {
 		a.errorResponse(w, r, 500, err)
 		return
 	}
-
-	d.ExpiresAt = time.Now().Add(domain.DeviceReceiptCheckPeriodDuration)
-	d.GracePeriodExpiresAt = d.ExpiresAt.Add(domain.DeviceGracePeriodAfterReceiptExpiry)
 
 	if err := a.deviceRepo.CreateOrUpdate(ctx, d); err != nil {
 		a.errorResponse(w, r, 500, err)

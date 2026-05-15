@@ -101,23 +101,16 @@ func SchedulerCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			liveActivitiesQueue, err := queue.OpenQueue("live-activities")
-			if err != nil {
-				return err
-			}
-
 			s := gocron.NewScheduler(time.UTC)
 			s.SetMaxConcurrentJobs(8, gocron.WaitMode)
 
 			_, _ = s.Every(5).Seconds().Do(func() { enqueueAccounts(ctx, logger, statsd, db, redis, luaSha, notifQueue) })
 			_, _ = s.Every(5).Seconds().Do(func() { enqueueSubreddits(ctx, logger, statsd, db, []rmq.Queue{subredditQueue, trendingQueue}) })
 			_, _ = s.Every(5).Seconds().Do(func() { enqueueUsers(ctx, logger, statsd, db, userQueue) })
-			_, _ = s.Every(5).Seconds().Do(func() { enqueueLiveActivities(ctx, logger, db, redis, luaSha, liveActivitiesQueue) })
 			_, _ = s.Every(5).Seconds().Do(func() { cleanQueues(logger, queue) })
 			_, _ = s.Every(5).Seconds().Do(func() { enqueueStuckAccounts(ctx, logger, statsd, db, stuckNotificationsQueue) })
 			_, _ = s.Every(1).Minute().Do(func() { reportStats(ctx, logger, statsd, db) })
 			//_, _ = s.Every(1).Minute().Do(func() { pruneAccounts(ctx, logger, db) })
-			//_, _ = s.Every(1).Minute().Do(func() { pruneDevices(ctx, logger, db) })
 			s.StartAsync()
 
 			srv := &http.Server{Addr: ":8080"}
@@ -154,60 +147,6 @@ func evalScript(ctx context.Context, redis *redis.Client) (string, error) {
 	return redis.ScriptLoad(ctx, lua).Result()
 }
 
-func enqueueLiveActivities(ctx context.Context, logger *zap.Logger, pool *pgxpool.Pool, redisConn *redis.Client, luaSha string, queue rmq.Queue) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	now := time.Now()
-	next := now.Add(domain.LiveActivityCheckInterval)
-
-	stmt := `UPDATE live_activities
-		SET next_check_at = $2
-		WHERE id IN (
-			SELECT id
-			FROM live_activities
-			WHERE next_check_at < $1
-			ORDER BY next_check_at
-			FOR UPDATE SKIP LOCKED
-			LIMIT 1000
-		)
-		RETURNING live_activities.apns_token`
-
-	ats := []string{}
-
-	rows, err := pool.Query(ctx, stmt, now, next)
-	if err != nil {
-		logger.Error("failed to fetch batch of live activities", zap.Error(err))
-		return
-	}
-	for rows.Next() {
-		var at string
-		_ = rows.Scan(&at)
-		ats = append(ats, at)
-	}
-	rows.Close()
-
-	if len(ats) == 0 {
-		return
-	}
-
-	batch, err := redisConn.EvalSha(ctx, luaSha, []string{"locks:live-activities"}, ats).StringSlice()
-	if err != nil {
-		logger.Error("failed to lock live activities", zap.Error(err))
-		return
-	}
-
-	if len(batch) == 0 {
-		return
-	}
-
-	logger.Debug("enqueueing live activity batch", zap.Int("count", len(batch)), zap.Time("start", now))
-
-	if err = queue.Publish(batch...); err != nil {
-		logger.Error("failed to enqueue live activity batch", zap.Error(err))
-	}
-}
-
 func pruneAccounts(ctx context.Context, logger *zap.Logger, pool *pgxpool.Pool) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -229,24 +168,6 @@ func pruneAccounts(ctx context.Context, logger *zap.Logger, pool *pgxpool.Pool) 
 
 	if count := stale + orphaned; count > 0 {
 		logger.Info("pruned accounts", zap.Int64("stale", stale), zap.Int64("orphaned", orphaned))
-	}
-}
-
-func pruneDevices(ctx context.Context, logger *zap.Logger, pool *pgxpool.Pool) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	now := time.Now()
-	dr := repository.NewPostgresDevice(pool)
-
-	count, err := dr.PruneStale(ctx, now)
-	if err != nil {
-		logger.Error("failed to clean stale devices", zap.Error(err))
-		return
-	}
-
-	if count > 0 {
-		logger.Info("pruned devices", zap.Int64("count", count))
 	}
 }
 
@@ -278,7 +199,6 @@ func reportStats(ctx context.Context, logger *zap.Logger, statsd *statsd.Client,
 			{"SELECT COUNT(*) FROM devices", "apollo.registrations.devices"},
 			{"SELECT COUNT(*) FROM subreddits", "apollo.registrations.subreddits"},
 			{"SELECT COUNT(*) FROM users", "apollo.registrations.users"},
-			{"SELECT COUNT(*) FROM live_activities", "apollo.registrations.live-activities"},
 		}
 	)
 
@@ -475,8 +395,7 @@ func enqueueAccounts(ctx context.Context, logger *zap.Logger, statsd *statsd.Cli
 		SELECT DISTINCT reddit_account_id FROM accounts
 		INNER JOIN devices_accounts ON devices_accounts.account_id = accounts.id
 		INNER JOIN devices ON devices.id = devices_accounts.device_id
-		WHERE grace_period_expires_at >= NOW()
-		AND accounts.is_deleted IS FALSE
+		WHERE accounts.is_deleted IS FALSE
 		ORDER BY reddit_account_id
 	`
 	rows, err := pool.Query(ctx, query)

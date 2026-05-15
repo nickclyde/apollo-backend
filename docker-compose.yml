@@ -178,10 +178,5 @@ services:
     command: ["worker", "--queue", "users", "--consumers", "16"]
     container_name: apollo-worker-users
 
-  worker-live-activities:
-    <<: *worker
-    command: ["worker", "--queue", "live-activities", "--consumers", "32"]
-    container_name: apollo-worker-live-activities
-
 volumes:
   pgdata:

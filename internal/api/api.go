@@ -124,6 +124,18 @@ func (a *api) Routes() *mux.Router {
 	r.HandleFunc("/v1/device/{apns}/account/{redditID}/watcher/{watcherID}", a.editWatcherHandler).Methods("PATCH")
 	r.HandleFunc("/v1/device/{apns}/account/{redditID}/watchers", a.listWatchersHandler).Methods("GET")
 
+	// Diagnostic stubs for endpoints Apollo iOS posts to under its three
+	// legacy hosts (apollopushserver.xyz, beta.apollonotifications.com,
+	// apolloreq.com) that the tweak rewrites here. Their exact request /
+	// response shapes are not public; we log the body and return a
+	// permissive empty 200 so the client doesn't treat the call as a
+	// failure. See [[onboarding-receipt-bypass]].
+	r.HandleFunc("/api/req_v2", a.reqV2Handler).Methods("POST")
+	r.HandleFunc("/api/announcement", a.announcementHandler).Methods("GET")
+	r.HandleFunc("/v1/receipt", a.checkReceiptHandler).Methods("POST")
+	r.HandleFunc("/v1/receipt/{apns}", a.checkReceiptHandler).Methods("POST")
+	r.NotFoundHandler = http.HandlerFunc(a.notFoundLogger)
+
 	r.Use(a.loggingMiddleware)
 	r.Use(a.requestIdMiddleware)
 

@@ -36,8 +36,6 @@ services:
       POSTGRES_USER: apollo
       POSTGRES_PASSWORD: apollo
       POSTGRES_DB: apollo
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -59,8 +57,6 @@ services:
       SERVER_RESET_QUERY: DISCARD ALL
       AUTH_TYPE: scram-sha-256
       ADMIN_USERS: postgres,apollo
-    ports:
-      - "6432:6432"
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,8 +64,6 @@ services:
   redis-queue:
     image: redis:7-alpine
     command: ["redis-server", "--maxmemory-policy", "noeviction"]
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -79,8 +73,6 @@ services:
   redis-locks:
     image: redis:7-alpine
     command: ["redis-server", "--maxmemory-policy", "noeviction"]
-    ports:
-      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -91,7 +83,9 @@ services:
   # unreachable, but it doesn't care what's actually on the other end.
   statsd:
     image: alpine:3.19
-    command: ["sh", "-c", "apk add --no-cache socat >/dev/null && exec socat -u udp-recv:8125 stdout"]
+    entrypoint: /statsd.sh
+    volumes:
+      - ./docker/statsd.sh:/statsd.sh:ro
     expose:
       - "8125/udp"
 
@@ -103,18 +97,10 @@ services:
     image: postgres:14-alpine
     environment:
       PGPASSWORD: apollo
-    entrypoint: ["sh", "-c"]
-    command:
-      - |
-        set -e
-        if psql -h postgres -U apollo -d apollo -tAc "SELECT to_regclass('public.accounts')" | grep -q accounts; then
-          echo "schema already loaded, skipping"
-        else
-          psql -h postgres -U apollo -d apollo -v ON_ERROR_STOP=1 -f /schema.sql
-          echo "schema loaded"
-        fi
+    entrypoint: /migrate.sh
     volumes:
       - ./docs/schema.sql:/schema.sql:ro
+      - ./docker/migrate.sh:/migrate.sh:ro
     depends_on:
       postgres:
         condition: service_healthy

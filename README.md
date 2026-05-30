@@ -2,6 +2,16 @@
 
 A self-hostable fork of [`christianselig/apollo-backend`](https://github.com/christianselig/apollo-backend), the archived Go service that powered push notifications, inbox checks, and subreddit/user watchers for the original [Apollo for Reddit](https://apolloapp.io/) iOS app.
 
+<p align="center">
+  <img src="images/IMG_4294.jpg" width="270"
+       alt="Private message push notification from a self-hosted Apollo backend on the iOS lock screen">
+  &nbsp;
+  <img src="images/IMG_4295.jpg" width="270"
+       alt="Post reply push notification from a self-hosted Apollo backend on the iOS lock screen">
+</p>
+
+<p align="center"><em>Reddit push notifications, back on a sideloaded Apollo — delivered entirely by your own server.</em></p>
+
 This fork is meant to be run together with **[Apollo-Reborn/Apollo-Reborn](https://github.com/Apollo-Reborn/Apollo-Reborn)** — the iOS tweak that lets sideloaded Apollo builds use the user's own Reddit OAuth credentials. The tweak's **Settings > Custom API > Notification Backend** URL field points at an instance of this fork; with that wired up, push notifications and watchers come back to life for sideloads that have a real APNs entitlement.
 
 Single-tenant by design: one deployment serves one sideloaded Apollo build (one bundle ID, one Apple Developer team), and can be shared with a small group of friends running the same build.
@@ -103,6 +113,11 @@ In the tweak (Apollo on-device): **Settings > Custom API > Notification Backend*
 | **Registration Token** | Same value as your backend's `REGISTRATION_SECRET`. Leave empty if you didn't set one. |
 
 Tap **Test Connection** to verify the tweak can reach `GET /v1/health`.
+
+<p align="center">
+  <img src="images/IMG_4296.jpg" width="300"
+       alt="Apollo Settings > Custom API > Notification Backend, showing the Backend URL and Registration Token fields and the Test Connection button">
+</p>
 
 Make sure the **Reddit API Key**, **Redirect URI**, and **User Agent** in the tweak's main Custom API screen are filled in for the bundle ID you signed with — Reddit's API rules want a UA shaped like `ios:com.you.Leto:v1.0 (by /u/yourname)`. The tweak attempts to inject these into registration bodies; if injection fails, the backend falls back to the matching `REDDIT_*` env vars (see above). Either path works.
 

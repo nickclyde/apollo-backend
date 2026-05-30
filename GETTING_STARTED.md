@@ -331,6 +331,11 @@ On your iPhone, in Apollo (with the tweak installed):
 3. Tap **Test Connection**. This hits `GET /v1/health` on your backend — a success here means the
    app can reach it.
 
+<p align="center">
+  <img src="images/IMG_4296.jpg" width="300"
+       alt="Apollo Settings → Custom API → Notification Backend, with the Backend URL and Registration Token fields and a Test Connection button">
+</p>
+
 While you're here, double-check the **main Custom API screen** has your **Reddit API Key**,
 **Redirect URI**, and **User Agent** filled in for *this* bundle ID (you needed these to get Reddit
 browsing working at all). The notification backend reuses them.
@@ -340,6 +345,14 @@ Finally, **turn notifications on**:
   Notifications**, or accept the in-app permission prompt).
 - Inside Apollo, enable inbox notifications for your account (and add any subreddit/user **watchers**
   you want).
+
+Once registration succeeds, the backend sends a **"hello, is this thing on?"** confirmation — a quick
+sign the whole chain is wired up:
+
+<p align="center">
+  <img src="images/IMG_4293.jpg" width="300"
+       alt="Apollo's in-app notifications settings showing the backend's 'hello, is this thing on?' confirmation after a successful registration">
+</p>
 
 ---
 
@@ -384,6 +397,16 @@ can swap in for `post_reply`:
 ```
 comment_reply   private_message   username_mention   subreddit_watcher   trending_post
 ```
+
+Here's what a delivered push looks like on the lock screen — a private message and a post reply:
+
+<p align="center">
+  <img src="images/IMG_4294.jpg" width="270"
+       alt="Private message push notification on the iOS lock screen">
+  &nbsp;
+  <img src="images/IMG_4295.jpg" width="270"
+       alt="Post reply push notification on the iOS lock screen">
+</p>
 
 ### 7c. The first-message "warmup" gotcha
 
